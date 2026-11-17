@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EpiFusion-XAI · PET + MRI explainable AI</title>
+<meta name="description" content="Upload an MNI-registered T1 MRI and FDG-PET and get model predictions, SHAP explanations, normative z-maps and temporal-lobe asymmetry, computed entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#f4f6f7; --surface:#fff; --surface-2:#eef1f2; --line:#d8dee0;
+  --fg:#17211f; --fg-dim:#5a6b67; --fg-faint:#859591;
+  --accent:#0f766e; --accent-soft:#d7eae7;
+  --mri:#2563a8; --pet:#c2561a; --fus:#1f8a4c; --pat:#c0384a; --ctl:#859591;
+  --warn:#b5820b; --warn-bg:#f6eccf;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --body:"Inter",-apple-system,system-ui,sans-serif;
+  --display:"Spectral",Georgia,serif; --r:10px;
+}
+:root[data-theme="dark"]{
+  --bg:#0e1514; --surface:#15201e; --surface-2:#1b2826; --line:#2a3836;
+  --fg:#e7edeb; --fg-dim:#9fb0ac; --fg-faint:#6b7c78;
+  --accent:#4db6ab; --accent-soft:#163a36;
+  --mri:#5b9bd8; --pet:#e6854c; --fus:#4ec47d; --pat:#e0697a; --ctl:#6b7c78;
+  --warn:#d9ab45; --warn-bg:#302714; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;text-wrap:balance}
+a{color:var(--accent)} button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+header{position:sticky;top:0;z-index:9;background:var(--surface);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand h1{font-size:1.2rem;letter-spacing:-.01em}
+.pill{font:600 .62rem/1 var(--mono);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:3px 7px;letter-spacing:.06em;text-transform:uppercase}
+.hsp{flex:1}
+.hlink{font-size:.82rem;color:var(--fg-dim);text-decoration:none}
+.hlink:hover{color:var(--accent)}
+.iconbtn{border:1px solid var(--line);background:transparent;border-radius:20px;padding:5px 11px;font-size:.8rem;color:var(--fg-dim);cursor:pointer}
+main{padding:18px 0 56px}
+.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px}
+@media(max-width:860px){.intro{grid-template-columns:1fr}}
+.intro h2{font-size:1.75rem;line-height:1.2;margin-bottom:8px}
+.intro p{color:var(--fg-dim);margin:0 0 8px;max-width:62ch}
+.note{align-self:start;background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:var(--r);padding:12px 14px;font-size:.84rem}
+.note b{color:var(--warn)}
+.cols{display:grid;grid-template-columns:320px 1fr;gap:18px;align-items:start}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.rail{position:sticky;top:70px;max-height:calc(100vh - 86px);overflow:auto}
+@media(max-width:900px){.rail{position:static;max-height:none}}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.kicker{font:600 .68rem/1 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:10px}
+.srow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:transparent;padding:8px;border-radius:7px;cursor:pointer;font-size:.86rem}
+.srow:hover{background:var(--surface-2)}
+.srow[aria-current="true"]{background:var(--accent-soft)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.srow .lab{flex:1;min-width:0}
+.srow .meta{font:500 .7rem/1 var(--mono);color:var(--fg-faint)}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:.8rem;color:var(--fg-dim)}
+.field input[type=number],.field select{border:1px solid var(--line);background:var(--surface-2);border-radius:7px;padding:6px 9px}
+.drop{display:block;border:1.5px dashed var(--line);border-radius:8px;padding:10px;text-align:center;font-size:.8rem;color:var(--fg-dim);cursor:pointer;background:var(--surface-2)}
+.drop.has{border-style:solid;border-color:var(--accent);color:var(--fg)}
+.drop input{display:none}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{width:100%;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;padding:9px;cursor:pointer}
+:root[data-theme="dark"] .btn{color:#07110f}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.small{font-size:.76rem;color:var(--fg-faint);margin:8px 0 0}
+table.auc{width:100%;border-collapse:collapse;font-size:.74rem}
+table.auc th,table.auc td{padding:4px 3px;text-align:right;border-bottom:1px solid var(--line)}
+table.auc th:first-child,table.auc td:first-child{text-align:left}
+table.auc th{color:var(--fg-dim);font-weight:600}
+.empty{padding:60px 24px;text-align:center;color:var(--fg-dim)}
+.empty h3{font-size:1.3rem;color:var(--fg);margin-bottom:6px}
+.rhead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}
+.rhead h2{font-size:1.45rem}
+.tag{font:600 .66rem/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:4px 8px;border-radius:20px;background:var(--surface-2);color:var(--fg-dim)}
+.tag.pat{background:color-mix(in srgb,var(--pat) 16%,transparent);color:var(--pat)}
+.tag.ctl{background:var(--surface-2)}
+.rbody{padding:16px 20px;display:flex;flex-direction:column;gap:22px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:700px){.cards{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--surface)}
+.card .k{font:600 .7rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.card .v{font:600 2rem/1.1 var(--display);margin:6px 0 2px}
+.card .s{font-size:.76rem;color:var(--fg-dim);min-height:1.2em}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:6px 0}
+.bar>i{display:block;height:100%}
+h3.sh{font-size:1.1rem;margin-bottom:4px}
+.sub{color:var(--fg-dim);font-size:.84rem;margin:0 0 10px;max-width:80ch}
+.viewer{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:700px){.viewer{grid-template-columns:1fr}}
+.vbox{background:#000;border-radius:8px;overflow:hidden;position:relative}
+.vbox canvas{width:100%;display:block;image-rendering:pixelated;cursor:crosshair}
+.vbox span{position:absolute;left:8px;top:6px;font:600 .66rem/1 var(--mono);color:#cfd8d6;letter-spacing:.05em}
+.vbox em{position:absolute;right:8px;top:6px;font:600 .66rem/1 var(--mono);color:#8fa09c;font-style:normal}
+.vctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:10px;font-size:.8rem;color:var(--fg-dim)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{border:1px solid var(--line);background:transparent;border-radius:20px;padding:4px 10px;font-size:.76rem;color:var(--fg-dim);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#07110f}
+.vctl input[type=range]{accent-color:var(--accent);width:110px;vertical-align:middle}
+.legend{display:flex;align-items:center;gap:8px;font:500 .72rem/1 var(--mono);color:var(--fg-dim);margin-top:8px}
+.legend canvas{height:10px;width:180px;border-radius:2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:800px){.grid2{grid-template-columns:1fr}}
+svg text{fill:var(--fg-dim);font-family:var(--body)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:var(--fg-dim);margin-right:12px}
+.chip i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.warnline{font-size:.8rem;color:var(--warn);background:var(--warn-bg);border-radius:7px;padding:7px 10px}
+.okline{font:500 .74rem/1.4 var(--mono);color:var(--fus)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600}
+details p,details li{color:var(--fg-dim);font-size:.84rem}
+footer{border-top:1px solid var(--line);padding:18px 0;color:var(--fg-faint);font-size:.78rem}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.err{color:var(--pat);font-size:.8rem;margin-top:8px}
+</style>
+</head>
+<body>
+<header><div class="wrap hrow">
+  <div class="brand"><h1>EpiFusion-XAI</h1><span class="pill">research demo</span></div>
+  <div class="hsp"></div>
+  <a class="hlink" href="#methods">Methods</a>
+  <a class="hlink" href="https://openneuro.org/datasets/ds004054" target="_blank" rel="noopener">Dataset</a>
+  <button class="iconbtn" id="theme" aria-label="Toggle dark mode">◐ Theme</button>
+</div></header>
+
+<main class="wrap">
+  <section class="intro">
+    <div>
+      <h2>Explainable PET + MRI analysis, in your browser</h2>
+      <p>Choose an example subject or upload a T1-weighted MRI and FDG-PET registered to MNI space. The page runs a confound-aware model trained on hybrid PET-MRI from people with temporal lobe epilepsy and healthy controls, and shows <em>why</em> it decided what it did: region-level SHAP, comparison with an age- and sex-matched healthy norm, and left–right temporal asymmetry.</p>
+      <p>Your files never leave your computer: everything is computed locally in JavaScript.</p>
+    </div>
+    <div class="note"><b>Research prototype, not a diagnostic tool.</b> Trained on <span id="ncohort">42</span> adults (OpenNeuro ds004054). It has not been validated clinically, it is not trained on children or on focal cortical dysplasia, and scores only describe similarity to this small cohort. It is a methods demonstration for a PhD application on early FCD detection in infants.</div>
+  </section>
+
+  <div class="cols">
+    <aside class="panel rail" aria-label="Inputs">
+      <div class="sec">
+        <div class="kicker">Example subjects</div>
+        <div id="samples"><span class="spinner"></span>Loading model…</div>
+        <p class="small">Real ds004054 scans, already registered to MNI152. These subjects were part of the training data; their held-out (cross-validated) scores are shown too.</p>
+      </div>
+      <div class="sec">
+        <div class="kicker">Upload your own</div>
+        <label class="drop" id="dropT1"><input type="file" id="fT1" accept=".nii,.gz"><span>T1w MRI in MNI 2 mm (.nii / .nii.gz) — required</span></label>
+        <div style="height:8px"></div>
+        <label class="drop" id="dropPET"><input type="file" id="fPET" accept=".nii,.gz"><span>FDG-PET in MNI 2 mm — optional</span></label>
+        <div style="height:10px"></div>
+        <div class="row2">
+          <label class="field">Age (years)<input type="number" id="age" min="1" max="100" value="35"></label>
+          <label class="field">Sex<select id="sex"><option value="F">Female</option><option value="M">Male</option></select></label>
+        </div>
+        <button class="btn" id="run" disabled>Analyse upload</button>
+        <div id="uperr" class="err" role="alert"></div>
+        <p class="small">Raw scans first need the same registration the model was trained with: run <a href="prepare_scan_cell.py">prepare_scan_cell.py</a> on Kaggle or Colab, then upload its two output files.</p>
+      </div>
+      <div class="sec">
+        <div class="kicker">How good is the model?</div>
+        <div id="auc"></div>
+        <p class="small">AUC, mean ± sd over 20× repeated cross-validation. Age + sex alone separate this cohort well, so the age/sex-adjusted row is the honest one.</p>
+      </div>
+    </aside>
+
+    <section class="panel" id="result" aria-live="polite">
+      <div class="empty" id="empty"><h3>Pick a subject to begin</h3><p>Select an example on the left, or upload an MNI-registered T1 (and PET).</p></div>
+      <div id="out" hidden>
+        <div class="rhead"><h2 id="rtitle">—</h2><span id="rtags"></span></div>
+        <div class="rbody">
+          <div>
+            <h3 class="sh">Model scores</h3>
+            <p class="sub">Probability that the scan resembles the patient group rather than controls, for each model. Dots show the cross-validated scores of the training cohort (<span class="chip" style="margin:0"><i style="background:var(--ctl);border-radius:50%"></i>controls</span> <span class="chip" style="margin:0"><i style="background:var(--pat);border-radius:50%"></i>patients</span>); the line marks this scan.</p>
+            <div class="cards" id="cards"></div>
+            <div id="verify" style="margin-top:8px"></div>
+          </div>
+
+          <div>
+            <h3 class="sh">Brain viewer</h3>
+            <p class="sub">Click any view to move the crosshair. Overlays: PET uptake, deviation from the healthy norm (z, blue = lower than expected, e.g. hypometabolism), combined MRI+PET deviation, or the fused model's region-level SHAP evidence.</p>
+            <div class="vctl">
+              <div class="seg" id="layers"></div>
+              <label>|z| ≥ <b id="thrv">2.5</b> <input type="range" id="thr" min="1.5" max="4" step="0.1" value="2.5"></label>
+              <label>opacity <input type="range" id="alpha" min="0" max="1" step="0.05" value="0.65"></label>
+            </div>
+            <div class="viewer">
+              <div class="vbox"><span>AXIAL</span><em id="cAx"></em><canvas id="vAx"></canvas></div>
+              <div class="vbox"><span>CORONAL</span><em id="cCor"></em><canvas id="vCor"></canvas></div>
+              <div class="vbox"><span>SAGITTAL</span><em id="cSag"></em><canvas id="vSag"></canvas></div>
+            </div>
+            <div class="legend" id="legend"></div>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <h3 class="sh">Why the fused model decided this</h3>
+              <p class="sub">Exact SHAP values for the logistic model: each bar is one brain region's push towards "patient-like" (right) or "control-like" (left).</p>
+              <div id="shap"></div>
+            </div>
+            <div>
+              <h3 class="sh">Which modality carried the evidence</h3>
+              <p class="sub">Share of this scan's total |SHAP| coming from MRI regions vs PET regions.</p>
+              <div id="share"></div>
+              <h3 class="sh" style="margin-top:18px">Largest deviations from the healthy norm</h3>
+              <p class="sub">Regions with the most negative mean PET z (lowest metabolism relative to age/sex-matched controls).</p>
+              <div id="hypo"></div>
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <h3 class="sh">How abnormal is the whole scan?</h3>
+              <p class="sub">Percentage of brain voxels with |z| ≥ 2.5 against the healthy norm, compared with the training cohort.</p>
+              <div id="zfrac"></div>
+            </div>
+            <div>
+              <h3 class="sh">Temporal-lobe asymmetry</h3>
+              <p class="sub">Left–right difference in a temporal + mesial-temporal region of interest, (L − R) / mean. One-sided temporal hypometabolism is a classic PET finding in TLE. <span id="asymp"></span></p>
+              <div id="asym"></div>
+            </div>
+          </div>
+
+          <details id="methods">
+            <summary>Methods and limitations</summary>
+            <ul>
+              <li><b>Data:</b> <span id="mdata"></span></li>
+              <li><b>Preprocessing:</b> T1 skull-stripped with a PET-derived brain mask, <span id="mreg"></span> registration to MNI152 (2 mm) with ANTsPy; the same transform is applied to the PET. Intensities normalised to their mean inside a shared brain mask (MRI ratio, PET global-mean SUVR).</li>
+              <li><b>Features:</b> mean value in <span id="mnreg"></span> <span id="matlas"></span> regions per modality.</li>
+              <li><b>Model:</b> L2-regularised logistic regression. Age and sex are regressed out of every feature (confound regression), then features are standardised. SHAP values are exact for this linear model (coefficient × standardised feature).</li>
+              <li><b>Healthy norm:</b> for each voxel, controls' values are modelled as a linear function of age and sex; a scan's z-score is its deviation from that prediction divided by the residual SD. Ages outside the controls' range are extrapolations.</li>
+              <li><b>Limitations:</b> small cohort; patients were younger than controls, so raw accuracy is inflated by age; affine registration only; no lesion masks or seizure-side labels; adults with TLE, not infants with FCD. Region-level importance is noisy at this sample size.</li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+<footer><div class="wrap">EpiFusion-XAI · Rishabh Jha, Medical Computer Vision Lab, University of Victoria · Data: OpenNeuro ds004054 (CC0) · Atlas: <span id="fatlas">Harvard-Oxford</span> · For research and education only; not for clinical use.</div></footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const A = {};          // loaded assets
+let S = null;          // current subject state
+const view = {layer: "pet", thr: 2.5, alpha: 0.65, c: [0, 0, 0]};
+
+/* ---------------- theme ---------------- */
+const root = document.documentElement;
+try { const t = localStorage.getItem("epx-theme"); if (t) root.dataset.theme = t;
+      else if (matchMedia("(prefers-color-scheme: dark)").matches) root.dataset.theme = "dark"; } catch (e) {}
+$("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  try { localStorage.setItem("epx-theme", root.dataset.theme); } catch (e) {} if (S) renderAll(); };
+const css = v => getComputedStyle(root).getPropertyValue(v).trim();
+
+/* ---------------- NIfTI-1 reader (.nii / .nii.gz) ---------------- */
+async function gunzipIfNeeded(buf) {
+  const u = new Uint8Array(buf);
+  if (u[0] === 0x1f && u[1] === 0x8b) {
+    if (typeof DecompressionStream === "undefined") throw new Error("This browser cannot decompress .gz files; upload an uncompressed .nii.");
+    const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return await new Response(ds).arrayBuffer();
+  }
+  return buf;
+}
+async function readNifti(buf) {
+  buf = await gunzipIfNeeded(buf);
+  const dv = new DataView(buf);
+  let le = true;
+  if (dv.getInt32(0, true) !== 348) { if (dv.getInt32(0, false) === 348) le = false; else throw new Error("Not a NIfTI-1 file."); }
+  const dim = []; for (let i = 0; i < 8; i++) dim.push(dv.getInt16(40 + 2 * i, le));
+  const dtype = dv.getInt16(70, le), voxOff = Math.round(dv.getFloat32(108, le));
+  let slope = dv.getFloat32(112, le), inter = dv.getFloat32(116, le);
+  if (!slope || !isFinite(slope)) { slope = 1; inter = 0; } if (!isFinite(inter)) inter = 0;
+  const sformCode = dv.getInt16(254, le);
+  const srow = [0, 1, 2].map(r => [0, 1, 2, 3].map(c => dv.getFloat32(280 + 16 * r + 4 * c, le)));
+  const nx = dim[1], ny = dim[2], nz = dim[3], n = nx * ny * nz;
+  const rd = {2: [1, "getUint8"], 4: [2, "getInt16"], 8: [4, "getInt32"], 16: [4, "getFloat32"], 64: [8, "getFloat64"],
+              256: [1, "getInt8"], 512: [2, "getUint16"], 768: [4, "getUint32"]}[dtype];
+  if (!rd) throw new Error("Unsupported NIfTI data type " + dtype + ".");
+  const out = new Float32Array(n), [bs, fn] = rd;
+  for (let i = 0; i < n; i++) { const v = dv[fn](voxOff + i * bs, le); out[i] = (isFinite(v) ? v : 0) * slope + inter; }
+  return {dim: [nx, ny, nz], nt: dim[0] >= 4 ? dim[4] : 1, data: out, srow, sformCode};
+}
+function checkGrid(nii, label) {
+  const [X, Y, Z] = A.meta.shape;
+  if (nii.dim[0] !== X || nii.dim[1] !== Y || nii.dim[2] !== Z)
+    throw new Error(`${label} is ${nii.dim.join("×")} voxels; the model needs MNI152 2 mm (${X}×${Y}×${Z}). Run prepare_scan_cell.py first.`);
+  if (nii.sformCode > 0) {
+    const aff = A.meta.affine;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++)
+      if (Math.abs(nii.srow[r][c] - aff[r][c]) > (c === 3 ? 2.5 : 0.05))
+        throw new Error(`${label} has a different orientation/origin from the MNI template. Run prepare_scan_cell.py first.`);
+  }
+}
+
+/* ---------------- assets ---------------- */
+async function bin(path, T) { const r = await fetch("assets/" + path); if (!r.ok) throw new Error("Missing assets/" + path); return new T(await r.arrayBuffer()); }
+async function loadAssets() {
+  const r = await fetch("assets/meta.json"); if (!r.ok) throw new Error("assets/meta.json not found - unzip imaging_xai_assets.zip into assets/");
+  A.meta = await r.json();
+  [A.bm, A.reg, A.roi, A.nMRI, A.nPET] = await Promise.all([bin("bm.bin", Int32Array), bin("regions.bin", Int32Array),
+    bin("roi.bin", Int32Array), bin("norm_mri.bin", Float32Array), bin("norm_pet.bin", Float32Array)]);
+  A.NB = A.meta.regions.length; A.nbm = A.meta.bm_len;
+}
+
+/* ---------------- analysis (mirrors the Python pipeline) ---------------- */
+function normalise(vol) { let s = 0; for (const i of A.bm) s += vol[i]; const m = s / A.nbm; const o = new Float32Array(vol.length);
+  for (let i = 0; i < vol.length; i++) o[i] = vol[i] / m; return o; }
+function regionMeans(vol) { const f = new Float64Array(A.NB);
+  A.meta.regions.forEach((g, k) => { let s = 0; for (let j = g.off; j < g.off + g.len; j++) s += vol[A.reg[j]]; f[k] = s / g.len; }); return f; }
+function score(model, feats, age, sex) {
+  const P = A.meta.models[model], phi = new Float64Array(feats.length); let logit = P.intercept;
+  for (let j = 0; j < feats.length; j++) {
+    const fa = A.meta.have_cov ? feats[j] - age * P.b_age[j] - sex * P.b_sex[j] : feats[j];
+    phi[j] = P.coef[j] * (fa - P.mean[j]) / P.scale[j]; logit += phi[j];
+  }
+  return {p: 1 / (1 + Math.exp(-logit)), phi};
+}
+function zmap(vol, norm, age, sex) {           // full-volume z (NaN outside brain mask)
+  const n = A.nbm, z = new Float32Array(vol.length).fill(NaN); let big = 0;
+  for (let k = 0; k < n; k++) {
+    const pred = norm[k] + norm[n + k] * age + norm[2 * n + k] * sex, v = (vol[A.bm[k]] - pred) / norm[3 * n + k];
+    z[A.bm[k]] = v; if (Math.abs(v) >= 2.5) big++;
+  }
+  return {z, frac: 100 * big / n};
+}
+function asym(vol) { const nL = A.meta.roi.L, nR = A.meta.roi.R; let l = 0, r = 0;
+  for (let i = 0; i < nL; i++) l += vol[A.roi[i]]; for (let i = nL; i < nL + nR; i++) r += vol[A.roi[i]];
+  l /= nL; r /= nR; return (l - r) / ((l + r) / 2) * 100; }
+function regionMeanZ(z) { return A.meta.regions.map((g, k) => { let s = 0, c = 0;
+  for (let j = g.off; j < g.off + g.len; j++) { const v = z[A.reg[j]]; if (!isNaN(v)) { s += v; c++; } } return c ? s / c : 0; }); }
+
+async function analyse({t1, pet, age, sex, title, tags, sample}) {
+  const sx = sex === "M" ? 1 : 0, s = {title, tags, sample, age, sex};
+  s.t1 = normalise(t1.data); s.pet = pet ? normalise(pet.data) : null;
+  s.fM = regionMeans(s.t1); s.fP = s.pet ? regionMeans(s.pet) : null;
+  s.sc = {MRI: score("MRI", s.fM, age, sx)};
+  if (s.pet) { s.sc.PET = score("PET", s.fP, age, sx); const f = new Float64Array(2 * A.NB); f.set(s.fM); f.set(s.fP, A.NB); s.sc.FUSED = score("FUSED", f, age, sx); }
+  s.zM = zmap(s.t1, A.nMRI, age, sx); if (s.pet) s.zP = zmap(s.pet, A.nPET, age, sx);
+  s.aiM = asym(s.t1); if (s.pet) s.aiP = asym(s.pet);
+  if (s.pet) { s.fusedZ = new Float32Array(s.t1.length).fill(NaN);
+    for (const i of A.bm) s.fusedZ[i] = Math.sqrt((s.zM.z[i] ** 2 + s.zP.z[i] ** 2) / 2);
+    s.rzP = regionMeanZ(s.zP.z); }
+  // window for MRI display
+  const vals = []; for (let k = 0; k < A.nbm; k += 7) vals.push(s.t1[A.bm[k]]); vals.sort((a, b) => a - b);
+  s.win = [vals[Math.floor(vals.length * .01)], vals[Math.floor(vals.length * .995)]];
+  if (s.pet) { const pv = []; for (let k = 0; k < A.nbm; k += 7) pv.push(s.pet[A.bm[k]]); pv.sort((a, b) => a - b); s.pwin = [pv[Math.floor(pv.length * .3)], pv[Math.floor(pv.length * .995)]]; }
+  S = s; view.layer = s.pet ? (view.layer || "pet") : "zM"; if (!s.pet && ["pet", "zP", "fz", "shapP"].includes(view.layer)) view.layer = "zM";
+  const aff = A.meta.affine; view.c = [-30, -22, -18].map((mm, d) => Math.round((mm - aff[d][3]) / aff[d][d]));
+  renderAll();
+}
+
+/* ---------------- colour maps ---------------- */
+const lerp = (a, b, t) => a + (b - a) * t;
+function ramp(stops, t) { t = Math.max(0, Math.min(1, t)); const n = stops.length - 1, i = Math.min(n - 1, Math.floor(t * n)), f = t * n - i;
+  return [0, 1, 2].map(c => lerp(stops[i][c], stops[i + 1][c], f)); }
+const HOT = [[0, 0, 0], [180, 20, 0], [255, 120, 0], [255, 220, 60], [255, 255, 230]];
+const RDBU = [[33, 102, 172], [103, 169, 207], [209, 229, 240], [247, 247, 247], [253, 219, 199], [239, 138, 98], [178, 24, 43]];
+const INFERNO = [[40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
+
+/* ---------------- viewer ---------------- */
+const LAYERS = [["none", "MRI only"], ["pet", "PET uptake"], ["zM", "MRI z"], ["zP", "PET z"], ["fz", "MRI+PET |z|"], ["shapP", "SHAP · PET"], ["shapM", "SHAP · MRI"]];
+function idx(x, y, z) { const [X, Y] = A.meta.shape; return x + X * (y + Y * z); }
+let shapVol = {};
+function buildShapVols() {
+  shapVol = {}; if (!S.sc.FUSED) return;
+  for (const [key, off] of [["shapP", A.NB], ["shapM", 0]]) {
+    const v = new Float32Array(S.t1.length).fill(NaN);
+    A.meta.regions.forEach((g, k) => { const val = S.sc.FUSED.phi[off + k]; for (let j = g.off; j < g.off + g.len; j++) v[A.reg[j]] = val; });
+    let m = 0; for (const x of S.sc.FUSED.phi) m = Math.max(m, Math.abs(x)); shapVol[key] = {v, m};
+  }
+}
+function overlayColor(layer, i) {
+  if (layer === "pet") { if (!S.pet) return null; const t = (S.pet[i] - S.pwin[0]) / (S.pwin[1] - S.pwin[0]); return t > 0 ? ramp(HOT, t) : null; }
+  if (layer === "zM" || layer === "zP") { const z = (layer === "zM" ? S.zM : S.zP).z[i]; if (isNaN(z) || Math.abs(z) < view.thr) return null; return ramp(RDBU, (z + 4) / 8); }
+  if (layer === "fz") { const z = S.fusedZ[i]; if (isNaN(z) || z < view.thr) return null; return ramp(INFERNO, (z - view.thr) / (5.5 - view.thr)); }
+  if (layer.startsWith("shap")) { const sv = shapVol[layer]; if (!sv) return null; const v = sv.v[i]; if (isNaN(v)) return null; return ramp(RDBU, (v / sv.m + 1) / 2); }
+  return null;
+}
+function drawPlane(cv, plane) {
+  const [X, Y, Z] = A.meta.shape, [cx, cy, cz] = view.c;
+  const W = plane === "sag" ? Y : X, H = plane === "ax" ? Y : Z;
+  cv.width = W; cv.height = H; const ctx = cv.getContext("2d"), im = ctx.createImageData(W, H);
+  const [w0, w1] = S.win;
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const yy = H - 1 - r; let i;
+    if (plane === "ax") i = idx(c, yy, cz); else if (plane === "cor") i = idx(c, cy, yy); else i = idx(cx, c, yy);
+    const g = Math.max(0, Math.min(255, (S.t1[i] - w0) / (w1 - w0) * 255));
+    let rgb = [g, g, g];
+    if (view.layer !== "none") { const oc = overlayColor(view.layer, i); if (oc) rgb = rgb.map((v, k) => lerp(v, oc[k], view.alpha)); }
+    const o = 4 * (r * W + c); im.data[o] = rgb[0]; im.data[o + 1] = rgb[1]; im.data[o + 2] = rgb[2]; im.data[o + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  ctx.strokeStyle = "rgba(77,182,171,.55)"; ctx.lineWidth = .6; ctx.beginPath();
+  const ch = plane === "ax" ? [cx, H - 1 - cy] : plane === "cor" ? [cx, H - 1 - cz] : [cy, H - 1 - cz];
+  ctx.moveTo(ch[0] + .5, 0); ctx.lineTo(ch[0] + .5, H); ctx.moveTo(0, ch[1] + .5); ctx.lineTo(W, ch[1] + .5); ctx.stroke();
+}
+function mm(d) { const a = A.meta.affine; return Math.round(a[d][d] * view.c[d] + a[d][3]); }
+function drawViewer() {
+  drawPlane($("vAx"), "ax"); drawPlane($("vCor"), "cor"); drawPlane($("vSag"), "sag");
+  $("cAx").textContent = `z ${mm(2)} mm`; $("cCor").textContent = `y ${mm(1)} mm`; $("cSag").textContent = `x ${mm(0)} mm`;
+  const lg = $("legend"); lg.innerHTML = "";
+  const spec = {pet: [HOT, "low", "high uptake"], zM: [RDBU, "z −4 (lower)", "+4 (higher)"], zP: [RDBU, "z −4 (hypometabolism)", "+4"],
+                fz: [INFERNO, `|z| ${view.thr}`, "5.5"], shapP: [RDBU, "→ control-like", "→ patient-like"], shapM: [RDBU, "→ control-like", "→ patient-like"]}[view.layer];
+  if (spec) { const c = document.createElement("canvas"); c.width = 180; c.height = 1; const x = c.getContext("2d");
+    for (let i = 0; i < 180; i++) { const [r, g, b] = ramp(spec[0], i / 179); x.fillStyle = `rgb(${r},${g},${b})`; x.fillRect(i, 0, 1, 1); }
+    lg.append(spec[1], c, spec[2]); }
+}
+function bindViewer() {
+  const set = (plane, ev) => { const cv = ev.currentTarget, rc = cv.getBoundingClientRect();
+    const c = Math.floor((ev.clientX - rc.left) / rc.width * cv.width), r = Math.floor((ev.clientY - rc.top) / rc.height * cv.height), v = cv.height - 1 - r;
+    if (plane === "ax") { view.c[0] = c; view.c[1] = v; } else if (plane === "cor") { view.c[0] = c; view.c[2] = v; } else { view.c[1] = c; view.c[2] = v; }
+    drawViewer(); };
+  $("vAx").onclick = e => set("ax", e); $("vCor").onclick = e => set("cor", e); $("vSag").onclick = e => set("sag", e);
+  $("thr").oninput = e => { view.thr = +e.target.value; $("thrv").textContent = view.thr.toFixed(1); drawViewer(); };
+  $("alpha").oninput = e => { view.alpha = +e.target.value; drawViewer(); };
+}
+function drawLayerButtons() {
+  const el = $("layers"); el.innerHTML = "";
+  for (const [k, lab] of LAYERS) {
+    const needsPet = ["pet", "zP", "fz", "shapP", "shapM"].includes(k); if (needsPet && !S.pet) continue;
+    const b = document.createElement("button"); b.textContent = lab; b.setAttribute("aria-pressed", view.layer === k);
+    b.onclick = () => { view.layer = k; drawLayerButtons(); drawViewer(); }; el.append(b);
+  }
+}
+
+/* ---------------- charts (SVG) ---------------- */
+const NS = "http://www.w3.org/2000/svg";
+function svg(w, h) { const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", `0 0 ${w} ${h}`); s.setAttribute("width", "100%"); return s; }
+function el(tag, attrs, parent, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; parent.append(e); return e; }
+function strip(values, ys, mark, lo, hi, fmt, height = 54) {         // cohort dots + this scan's marker
+  const W = 360, H = height, s = svg(W, H), x = v => 10 + (W - 20) * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);
+  el("line", {x1: 10, x2: W - 10, y1: H - 16, y2: H - 16, stroke: css("--line")}, s);
+  values.forEach((v, i) => el("circle", {cx: x(v), cy: (ys[i] ? 14 : 26) + ((i * 37) % 7) - 3, r: 3.2, fill: ys[i] ? css("--pat") : css("--ctl"), "fill-opacity": .75}, s));
+  [lo, (lo + hi) / 2, hi].forEach(t => el("text", {x: x(t), y: H - 3, "text-anchor": "middle", "font-size": 9}, s, fmt(t)));
+  if (mark != null && isFinite(mark)) { el("line", {x1: x(mark), x2: x(mark), y1: 2, y2: H - 16, stroke: css("--accent"), "stroke-width": 2.5}, s); }
+  return s;
+}
+function hbars(items, colorFn, signed) {
+  const W = 420, rh = 22, H = items.length * rh + 22, s = svg(W, H), lab = 175, m = Math.max(...items.map(d => Math.abs(d.v)), 1e-9);
+  const x0 = signed ? lab + (W - lab - 10) / 2 : lab, sc = (signed ? (W - lab - 10) / 2 : W - lab - 10) / m;
+  items.forEach((d, i) => { const y = i * rh + 4;
+    el("text", {x: lab - 6, y: y + 13, "text-anchor": "end", "font-size": 10.5}, s, d.label);
+    const w = Math.abs(d.v) * sc; el("rect", {x: d.v >= 0 ? x0 : x0 - w, y: y + 3, width: Math.max(w, 1), height: rh - 8, rx: 2, fill: colorFn(d)}, s); });
+  if (signed) el("line", {x1: x0, x2: x0, y1: 0, y2: H - 18, stroke: css("--fg-faint")}, s);
+  if (signed) { el("text", {x: x0 - 4, y: H - 4, "text-anchor": "end", "font-size": 9.5}, s, "← control-like"); el("text", {x: x0 + 4, y: H - 4, "font-size": 9.5}, s, "patient-like →"); }
+  return s;
+}
+const short = n => n.replace("Left ", "L ").replace("Right ", "R ").replace(" Gyrus", "").replace(", ", " ").replace(" division", "").slice(0, 34);
+
+/* ---------------- render ---------------- */
+function renderAll() {
+  $("empty").hidden = true; $("out").hidden = false;
+  $("rtitle").textContent = S.title; $("rtags").innerHTML = S.tags;
+  const coh = A.meta.cohort, cards = $("cards"); cards.innerHTML = "";
+  for (const [k, lab, col] of [["MRI", "MRI model", "--mri"], ["PET", "PET model", "--pet"], ["FUSED", "MRI + PET model", "--fus"]]) {
+    const c = document.createElement("div"); c.className = "card"; const sc = S.sc[k];
+    c.innerHTML = `<div class="k" style="color:var(${col})">${lab}</div>`;
+    if (!sc) { c.innerHTML += `<div class="v" style="color:var(--fg-faint)">—</div><div class="s">needs a PET scan</div>`; cards.append(c); continue; }
+    const lean = sc.p >= .5 ? "patient-like" : "control-like";
+    c.innerHTML += `<div class="v">${sc.p.toFixed(2)}</div><div class="bar"><i style="width:${sc.p * 100}%;background:var(${col})"></i></div>
+      <div class="s">${lean}${S.sample ? ` · held-out score ${S.sample.oof[k].toFixed(2)}` : ""}</div>`;
+    c.append(strip(coh.oof[k], coh.y, sc.p, 0, 1, v => v.toFixed(1)));
+    cards.append(c);
+  }
+  // verification against the Python pipeline (example subjects only)
+  const vf = $("verify"); vf.innerHTML = "";
+  if (S.sample) { const d = Math.max(...Object.keys(S.sc).map(k => Math.abs(S.sc[k].p - S.sample.ref[k])));
+    vf.innerHTML = d < 0.01 ? `<div class="okline">✓ Browser result matches the Python pipeline for this subject (max difference ${d.toFixed(4)}). Scores above are in-sample; the held-out score is the honest estimate.</div>`
+                           : `<div class="warnline">Browser result differs from the Python pipeline by ${d.toFixed(3)}; check the assets were exported from the same run.</div>`;
+    console.log("parity", S.title, Object.fromEntries(Object.keys(S.sc).map(k => [k, [S.sc[k].p, S.sample.ref[k]]]))); }
+  const cr = A.meta.age_range_controls;
+  if (A.meta.have_cov && (S.age < cr[0] || S.age > cr[1])) vf.innerHTML += `<div class="warnline" style="margin-top:6px">Age ${S.age} is outside the controls' range (${cr[0]}–${cr[1]} y): the age adjustment and healthy norm are extrapolated, so treat z-maps and scores with extra caution.</div>`;
+
+  buildShapVols(); drawLayerButtons(); drawViewer();
+
+  // SHAP bars
+  const sh = $("shap"); sh.innerHTML = "";
+  const src = S.sc.FUSED || S.sc.MRI, names = A.meta.regions.map(r => r.name);
+  const items = Array.from(src.phi, (v, j) => ({v, mod: S.sc.FUSED ? (j < A.NB ? "MRI" : "PET") : "MRI", label: (S.sc.FUSED ? (j < A.NB ? "MRI · " : "PET · ") : "MRI · ") + short(names[j % A.NB])}))
+    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 12);
+  if (!S.sc.FUSED) sh.innerHTML = `<p class="small">PET not provided: showing the MRI-only model.</p>`;
+  sh.append(hbars(items, d => d.v < 0 ? css("--fg-faint") : (d.mod === "MRI" ? css("--mri") : css("--pet")), true));
+  // modality share
+  const shr = $("share"); shr.innerHTML = "";
+  if (S.sc.FUSED) { let m = 0, p = 0; S.sc.FUSED.phi.forEach((v, j) => j < A.NB ? m += Math.abs(v) : p += Math.abs(v)); const pm = 100 * m / (m + p);
+    shr.innerHTML = `<div class="bar" style="height:14px;display:flex"><i style="width:${pm}%;background:var(--mri)"></i><i style="width:${100 - pm}%;background:var(--pet)"></i></div>
+      <span class="chip"><i style="background:var(--mri)"></i>MRI ${pm.toFixed(0)}%</span><span class="chip"><i style="background:var(--pet)"></i>PET ${(100 - pm).toFixed(0)}%</span>`;
+  } else shr.innerHTML = `<p class="small">Needs PET.</p>`;
+  // hypometabolism list
+  const hy = $("hypo"); hy.innerHTML = "";
+  if (S.rzP) { const it = S.rzP.map((v, k) => ({v, label: short(names[k])})).sort((a, b) => a.v - b.v).slice(0, 6);
+    hy.append(hbars(it.map(d => ({...d, v: -d.v})), () => css("--mri"), false));
+    const n = hy.querySelector("svg"); el("text", {x: 175, y: +n.getAttribute("viewBox").split(" ")[3] - 4, "font-size": 9.5}, n, "bar length = −mean PET z");
+  } else hy.innerHTML = `<p class="small">Needs PET.</p>`;
+  // z fraction
+  const zf = $("zfrac"); zf.innerHTML = "";
+  for (const [k, lab, z] of [["MRI", "MRI", S.zM], ["PET", "PET", S.zP]]) {
+    if (!z) { zf.innerHTML += `<p class="small">PET: needs a PET scan.</p>`; continue; }
+    const vals = coh.zfrac[k], hi = Math.max(...vals, z.frac) * 1.1;
+    const d = document.createElement("div"); d.innerHTML = `<div class="small" style="margin:0"><b style="color:var(--fg)">${lab}: ${z.frac.toFixed(1)}%</b> of brain voxels</div>`;
+    d.append(strip(vals, coh.y, z.frac, 0, hi, v => v.toFixed(0) + "%")); zf.append(d);
+  }
+  // asymmetry
+  const as = $("asym"); as.innerHTML = "";
+  for (const [k, v] of [["MRI", S.aiM], ["PET", S.aiP]]) {
+    if (v == null) { as.innerHTML += `<p class="small">PET: needs a PET scan.</p>`; continue; }
+    const vals = coh.ai[k], lim = Math.max(...vals.map(Math.abs), Math.abs(v)) * 1.1;
+    const d = document.createElement("div"); d.innerHTML = `<div class="small" style="margin:0"><b style="color:var(--fg)">${k}: ${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b> (${v >= 0 ? "left" : "right"} higher)</div>`;
+    d.append(strip(vals, coh.y, v, -lim, lim, t => (t > 0 ? "+" : "") + t.toFixed(0) + "%")); as.append(d);
+  }
+  $("asymp").textContent = A.meta.asym_p.PET != null ? `In training, |asymmetry| was larger in patients on PET (adjusted p = ${(+A.meta.asym_p.PET).toPrecision(2)}) but not on MRI (p = ${(+A.meta.asym_p.MRI).toPrecision(2)}).` : "";
+}
+
+/* ---------------- inputs ---------------- */
+function renderRail() {
+  const m = A.meta, box = $("samples"); box.innerHTML = "";
+  $("ncohort").textContent = m.n.controls + m.n.patients;
+  for (const s of m.samples) {
+    const b = document.createElement("button"); b.className = "srow";
+    b.innerHTML = `<span class="dot" style="background:var(${s.group === "patient" ? "--pat" : "--ctl"})"></span><span class="lab">${s.id.replace("sub-", "")}</span><span class="meta">${s.group} · ${Math.round(s.age)} y · ${s.sex}</span>`;
+    b.onclick = async () => {
+      document.querySelectorAll(".srow").forEach(x => x.removeAttribute("aria-current")); b.setAttribute("aria-current", "true");
+      $("rtitle").textContent = "Loading…";
+      try {
+        const [t1, pet] = await Promise.all([fetch("assets/" + s.t1).then(r => r.arrayBuffer()).then(readNifti), fetch("assets/" + s.pet).then(r => r.arrayBuffer()).then(readNifti)]);
+        await analyse({t1, pet, age: s.age, sex: s.sex, sample: s, title: s.id,
+          tags: `<span class="tag ${s.group === "patient" ? "pat" : "ctl"}">${s.group === "patient" ? "TLE patient" : "control"}</span> <span class="tag">${Math.round(s.age)} y · ${s.sex}</span> <span class="tag">example · in training set</span>`});
+      } catch (e) { alert(e.message); }
+    };
+    box.append(b);
+  }
+  const t = document.createElement("table"); t.className = "auc";
+  t.innerHTML = `<tr><th>Setting</th><th>n</th><th>Age</th><th>MRI</th><th>PET</th><th>Both</th></tr>` +
+    m.auc.map(r => `<tr><td>${r.setting.replace("All subjects, ", "").replace(", raw", "")}</td><td>${r.n}</td>${["AGE", "MRI", "PET", "FUSED"].map(k => `<td>${r[k] ? r[k][0].toFixed(2) : "–"}</td>`).join("")}</tr>`).join("");
+  $("auc").append(t);
+  $("mdata").textContent = `${m.dataset}; ${m.n.controls} controls and ${m.n.patients} patients.`;
+  $("fatlas").textContent = m.atlas; $("mreg").textContent = m.registration; $("mnreg").textContent = m.regions.length; $("matlas").textContent = m.atlas;
+}
+const files = {};
+function bindUploads() {
+  for (const [inp, drop, key] of [["fT1", "dropT1", "t1"], ["fPET", "dropPET", "pet"]]) {
+    $(inp).onchange = e => { const f = e.target.files[0]; files[key] = f; const d = $(drop); d.classList.toggle("has", !!f);
+      if (f) d.querySelector("span").textContent = f.name; $("run").disabled = !files.t1; };
+  }
+  $("run").onclick = async () => {
+    $("uperr").textContent = ""; $("run").innerHTML = '<span class="spinner"></span>Analysing…'; $("run").disabled = true;
+    try {
+      const t1 = await readNifti(await files.t1.arrayBuffer()); checkGrid(t1, "The T1");
+      let pet = null; if (files.pet) { pet = await readNifti(await files.pet.arrayBuffer()); checkGrid(pet, "The PET"); }
+      const age = +$("age").value, sex = $("sex").value;
+      if (!(age > 0)) throw new Error("Please enter an age.");
+      document.querySelectorAll(".srow").forEach(x => x.removeAttribute("aria-current"));
+      await analyse({t1, pet, age, sex, sample: null, title: files.t1.name.replace(/\.nii(\.gz)?$/, "").replace(/_T1w(_MNI)?$/, ""),
+        tags: `<span class="tag">your upload</span> <span class="tag">${age} y · ${sex}</span>${pet ? "" : ' <span class="tag">MRI only</span>'}`});
+    } catch (e) { $("uperr").textContent = e.message; }
+    $("run").textContent = "Analyse upload"; $("run").disabled = !files.t1;
+  };
+}
+
+loadAssets().then(() => { renderRail(); bindUploads(); bindViewer();
+    const want = new URLSearchParams(location.search).get("sample");          // e.g. ?sample=sub-patient17
+    const i = A.meta.samples.findIndex(s => s.id === want);
+    if (i >= 0) document.querySelectorAll(".srow")[i].click(); })
+  .catch(e => { $("samples").innerHTML = `<div class="err">${e.message}</div>`; });
+</script>
+</body>
+</html>
